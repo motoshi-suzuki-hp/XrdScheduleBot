@@ -87,7 +87,7 @@ def handle_message(event):
         TextSendMessage(text="予定が追加されました。")
     )
 
-def is_schedule_overlap(start_time, end_time):
+def get_overlap_schedule(start_time, end_time):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     cursor.execute('''
