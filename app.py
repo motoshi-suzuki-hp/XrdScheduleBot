@@ -2,62 +2,102 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from flask_sqlalchemy import SQLAlchemy
-
-
-
+import sqlite3
+from datetime import datetime
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///schedule.db'
-db = SQLAlchemy(app)
+# LINE Botの設定
+YOUR_CHANNEL_ACCESS_TOKEN = 'caJal+9vjkxrQnDCoNvdIUJp+6RbN0CV8SevJdhx7VPmFcLWzI7xjsRhQ7RYmjm5LGhkUU9Co8gCp2hvOfarpHUmQpPqpsiMb6m8en7nzrF2w8PJJRGbcs0x6NhTEUfgUBZTa0vaodq9ZeBD8znLFAdB04t89/1O/w1cDnyilFU='
+YOUR_CHANNEL_SECRET = 'e18551997846615098b69cef7933efb2'
+line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(YOUR_CHANNEL_SECRET)
 
-line_bot_api = LineBotApi('caJal+9vjkxrQnDCoNvdIUJp+6RbN0CV8SevJdhx7VPmFcLWzI7xjsRhQ7RYmjm5LGhkUU9Co8gCp2hvOfarpHUmQpPqpsiMb6m8en7nzrF2w8PJJRGbcs0x6NhTEUfgUBZTa0vaodq9ZeBD8znLFAdB04t89/1O/w1cDnyilFU=')
-handler = WebhookHandler('e18551997846615098b69cef7933efb2')
+# SQLiteデータベースの設定
+DATABASE = 'schedule.db'
+
+def create_table():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time DATETIME,
+            end_time DATETIME,
+            event_name TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+create_table()
 
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_message = event.message.text.split(',')
-    if len(user_message) == 3:
-        schedule_name, start_time, end_time = user_message
-        new_schedule = Schedule(name=schedule_name, start_time=start_time, end_time=end_time)
-        db.session.add(new_schedule)
-        try:
-            db.session.commit()
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="予定が追加されました。")
-            )
-        except:
-            db.session.rollback()
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="予定が重複しています。")
-            )
-    else:
+    user_message = event.message.text
+
+    # メッセージが正しい形式か確認
+    try:
+        event_name, start_time_str, end_time_str = user_message.split(',')
+        start_time = datetime.strptime(start_time_str.strip(), '%Y-%m-%d %H:%M')
+        end_time = datetime.strptime(end_time_str.strip(), '%Y-%m-%d %H:%M')
+    except ValueError:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="正しい形式で予定を入力してください。")
+            TextSendMessage(text="メッセージの形式が正しくありません。正しい形式で入力してください。")
         )
+        return
 
+    # 既存の予定との重複を確認
+    if is_schedule_overlap(start_time, end_time):
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="指定された期間には既に予定が入っています。")
+        )
+        return
 
+    # データベースに予定を追加
+    add_schedule(start_time, end_time, event_name)
 
-class Schedule(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    start_time = db.Column(db.String(20), nullable=False)
-    end_time = db.Column(db.String(20), nullable=False)
+    # 追加完了のメッセージを送信
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="予定が追加されました。")
+    )
 
+def is_schedule_overlap(start_time, end_time):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM schedules
+        WHERE start_time < ? AND end_time > ?
+    ''', (end_time, start_time))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def add_schedule(start_time, end_time, event_name):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO schedules (start_time, end_time, event_name)
+        VALUES (?, ?, ?)
+    ''', (start_time, end_time, event_name))
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
