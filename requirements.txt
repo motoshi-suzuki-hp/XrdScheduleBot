@@ -2,3 +2,4 @@ Flask
 Gunicorn
 line-bot-sdk
 SQLAlchemy
+flask_sqlalchemy
