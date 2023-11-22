@@ -62,10 +62,19 @@ def handle_message(event):
         return
 
     # 既存の予定との重複を確認
-    if is_schedule_overlap(start_time, end_time):
+    existing_schedule = get_overlap_schedule(start_time, end_time)
+
+    if existing_schedule:
+        existing_event_name = existing_schedule[2]
+        existing_start_time = existing_schedule[0]
+        existing_end_time = existing_schedule[1]
+
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="指定された期間には既に予定が入っています。")
+            TextSendMessage(text=f"指定された期間には既に予定が入っています。\n"
+                                f"既存の予定: {existing_event_name}\n"
+                                f"開始日時: {existing_start_time}\n"
+                                f"終了日時: {existing_end_time}")
         )
         return
 
