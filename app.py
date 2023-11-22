@@ -136,7 +136,7 @@ def get_overlap_schedule(start_time, end_time):
     ''', (end_time, start_time))
     result = cursor.fetchone()
     conn.close()
-    return result is not None
+    return result
 
 def add_schedule(start_time, end_time, event_name):
     conn = sqlite3.connect(DATABASE)
