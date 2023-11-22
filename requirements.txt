@@ -2,4 +2,4 @@ Flask
 Gunicorn
 line-bot-sdk
 datetime
-sqlite3
+db-sqlite3
