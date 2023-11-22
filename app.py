@@ -105,9 +105,9 @@ def handle_message(event):
     existing_schedule = get_overlap_schedule(start_time, end_time)
 
     if existing_schedule:
-        existing_event_name = existing_schedule[2]
-        existing_start_time = existing_schedule[0]
-        existing_end_time = existing_schedule[1]
+        existing_event_name = existing_schedule[3]
+        existing_start_time = existing_schedule[1]
+        existing_end_time = existing_schedule[2]
 
         line_bot_api.reply_message(
             event.reply_token,
