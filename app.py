@@ -4,6 +4,9 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import sqlite3
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import timedelta
+
 
 app = Flask(__name__)
 
@@ -15,6 +18,28 @@ handler = WebhookHandler(YOUR_CHANNEL_SECRET)
 
 # SQLiteデータベースの設定
 DATABASE = 'schedule.db'
+
+# APSchedulerの初期化
+scheduler = BackgroundScheduler()
+scheduler.start()
+
+
+# データベースから終了時刻が過ぎた予定を削除するタスク
+def remove_expired_schedules():
+    current_time = datetime.now()
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM schedules
+        WHERE end_time < ?
+    ''', (current_time,))
+    conn.commit()
+    conn.close()
+
+# 定期的に予定を削除するタスクをスケジューラに登録
+scheduler.add_job(remove_expired_schedules, 'interval', hours=1)  # 1時間ごとに実行
+
 
 def create_table():
     conn = sqlite3.connect(DATABASE)
@@ -49,6 +74,22 @@ def callback():
 def handle_message(event):
     user_message = event.message.text
 
+    # 「今後の予定」が送信された場合
+    if user_message == "今後の予定":
+        schedules = get_upcoming_schedules()
+        if schedules:
+            response_message = "今後の予定:\n"
+            for schedule in schedules:
+                response_message += f"{schedule[2]}\n開始日時: {schedule[0]}\n終了日時: {schedule[1]}\n\n"
+        else:
+            response_message = "今後の予定はありません。"
+
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=response_message)
+        )
+        return    
+
     # メッセージが正しい形式か確認
     try:
         event_name, start_time_str, end_time_str = user_message.split(',')
@@ -72,9 +113,7 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=f"指定された期間には既に予定が入っています。\n"
-                                f"既存の予定: {existing_event_name}\n"
-                                f"開始日時: {existing_start_time}\n"
-                                f"終了日時: {existing_end_time}")
+                                f"既存の予定: {existing_event_name}, 開始日時: {existing_start_time}, 終了日時: {existing_end_time}")
         )
         return
 
@@ -107,6 +146,21 @@ def add_schedule(start_time, end_time, event_name):
     ''', (start_time, end_time, event_name))
     conn.commit()
     conn.close()
+
+def get_upcoming_schedules():
+    current_time = datetime.now()
+    two_weeks_later = current_time + timedelta(weeks=2)
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM schedules
+        WHERE start_time >= ? AND start_time <= ?
+        ORDER BY start_time
+    ''', (current_time, two_weeks_later))
+    schedules = cursor.fetchall()
+    conn.close()
+    return schedules
 
 if __name__ == "__main__":
     app.run()
