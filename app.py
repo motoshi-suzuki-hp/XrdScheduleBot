@@ -79,7 +79,7 @@ def handle_message(event):
         if schedules:
             response_message = "今後の予定:\n"
             for schedule in schedules:
-                response_message += f"{schedule[2]}\n開始日時: {schedule[0]}\n終了日時: {schedule[1]}\n\n"
+                response_message += f"{schedule[3]}\n開始日時: {schedule[1]}\n終了日時: {schedule[2]}\n"
         else:
             response_message = "今後の予定はありません。"
 
