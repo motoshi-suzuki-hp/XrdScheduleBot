@@ -112,9 +112,9 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=f"指定された期間には既に予定が入っています。\n"
-                                f"既存の予定: {existing_event_name}\n"
-                                f"開始日時: {existing_start_time}"
-                                f"終了日時: {existing_end_time}")
+                                  f"既存の予定: {existing_event_name}\n"
+                                  f"開始日時: {existing_start_time}\n"
+                                  f"終了日時: {existing_end_time}")
         )
         return
 
